@@ -17,6 +17,12 @@ let METRICS = {
     overviewFpsFirst:
     { description: "Frame rate when going to the overview, first time",
       units: "frames / s" },
+    appsFpsFirst:
+    { description: "Frame rate when showing apps first time",
+      units: "frames / s" },
+    appsFps:
+    { description: "Frame rate when showing apps second time",
+      units: "frames / s" },
     overviewLatencySubsequent:
     { description: "Time to first frame after triggering overview, second time",
       units: "us"},
@@ -72,43 +78,9 @@ function run() {
     Scripting.defineScriptEvent("applicationsShowStart", "Starting to switch to applications view");
     Scripting.defineScriptEvent("applicationsShowDone", "Done switching to applications view");
 
-    Main.overview.connect('shown', function() {
-                              Scripting.scriptEvent('overviewShowDone');
-                          });
 
     yield Scripting.sleep(1000);
 
-    for (let i = 0; i < 2 * WINDOW_CONFIGS.length; i++) {
-        // We go to the overview twice for each configuration; the first time
-        // to calculate the mipmaps for the windows, the second time to get
-        // a clean set of numbers.
-        if ((i % 2) == 0) {
-            let config = WINDOW_CONFIGS[i / 2];
-            yield Scripting.destroyTestWindows();
-
-            for (let k = 0; k < config.count; k++)
-                yield Scripting.createTestWindow(config.width, config.height, config.alpha, config.maximized);
-
-            yield Scripting.waitTestWindows();
-            yield Scripting.sleep(1000);
-            yield Scripting.waitLeisure();
-        }
-
-        Scripting.scriptEvent('overviewShowStart');
-        Main.overview.show();
-
-        yield Scripting.waitLeisure();
-        Main.overview.hide();
-        yield Scripting.waitLeisure();
-
-        System.gc();
-        yield Scripting.sleep(1000);
-        Scripting.collectStatistics();
-        Scripting.scriptEvent('afterShowHide');
-    }
-
-    yield Scripting.destroyTestWindows();
-    yield Scripting.sleep(1000);
 
     Main.overview.show();
     yield Scripting.waitLeisure();
@@ -117,6 +89,7 @@ function run() {
         Scripting.scriptEvent('applicationsShowStart');
         Main.overview._dash.showAppsButton.checked = true;
         yield Scripting.waitLeisure();
+        Scripting.collectStatistics();
         Scripting.scriptEvent('applicationsShowDone');
         Main.overview._dash.showAppsButton.checked = false;
         yield Scripting.waitLeisure();
@@ -134,6 +107,9 @@ let firstOverviewUsedSize;
 let haveSwapComplete = false;
 let applicationsShowStart;
 let applicationsShowCount = 0;
+let showingApps = false;
+let appsFrames;
+let finishedShowingApps = false;
 
 function script_overviewShowStart(time) {
     showingOverview = true;
@@ -151,6 +127,9 @@ function script_overviewShowDone(time) {
 
 function script_applicationsShowStart(time) {
     applicationsShowStart = time;
+    showingApps = true;
+    appsFrames = 0;
+    finishedShowingApps = false;
 }
 
 function script_applicationsShowDone(time) {
@@ -159,6 +138,7 @@ function script_applicationsShowDone(time) {
         METRICS.applicationsShowTimeFirst.value = time - applicationsShowStart;
     else
         METRICS.applicationsShowTimeSubsequent.value = time - applicationsShowStart;
+    finishedShowingApps = true;
 }
 
 function script_afterShowHide(time) {
@@ -179,6 +159,30 @@ function _frameDone(time) {
             overviewLatency = time - overviewShowStart;
 
         overviewFrames++;
+    }
+    
+    if (showingApps) {
+        if (appsFrames == 0)
+            appsLatency = time - applicationsShowStart;
+
+        appsFrames++;
+    }
+    
+    if (finishedShowingApps) {
+        showingApps = false;
+        finishedShowingApps = false;
+
+        let dt = (time - (applicationsShowStart + appsLatency)) / 1000000;
+
+        // If we see a start frame and an end frame, that would
+        // be 1 frame for a FPS computation, hence the '- 1'
+        let fps = (appsFrames - 1) / dt;
+        
+        if (applicationsShowCount == 1) {
+            METRICS.appsFpsFirst.value = fps;
+        } else if (applicationsShowCount == 2) {
+            METRICS.appsFps.value = fps;
+        }
     }
 
     if (finishedShowingOverview) {
