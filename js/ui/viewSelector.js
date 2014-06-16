@@ -162,7 +162,7 @@ const ViewSelector = new Lang.Class({
 
         this._workspacesDisplay.show();
         this._activePage = null;
-        this._showPage(this._workspacesPage);
+        this._showPage(this._workspacesPage, true);
 
         if (!this._workspacesDisplay.activeWorkspaceHasMaximizedWindows())
             Main.overview.fadeOutDesktop();
@@ -220,7 +220,7 @@ const ViewSelector = new Lang.Class({
             });
     },
 
-    _showPage: function(page, noFade) {
+    _showPage: function(page, animateOut) {
         if (page == this._activePage)
             return;
 
@@ -228,7 +228,7 @@ const ViewSelector = new Lang.Class({
         this._activePage = page;
         this.emit('page-changed');
 
-        if (oldPage && !noFade)
+        if (oldPage && animateOut)
             Tweener.addTween(oldPage,
                              { opacity: 0,
                                time: OverviewControls.SIDE_CONTROLS_ANIMATION_TIME,
@@ -252,7 +252,8 @@ const ViewSelector = new Lang.Class({
             return;
 
         this._showPage(this._showAppsButton.checked ?
-                       this._appsPage : this._workspacesPage);
+                       this._appsPage : this._workspacesPage,
+                       true);
     },
 
     _resetShowAppsButton: function() {
@@ -260,7 +261,7 @@ const ViewSelector = new Lang.Class({
         this._showAppsButton.checked = false;
         this._showAppsBlocked = false;
 
-        this._showPage(this._workspacesPage, true);
+        this._showPage(this._workspacesPage, false);
     },
 
     _onStageKeyPress: function(actor, event) {
@@ -295,8 +296,9 @@ const ViewSelector = new Lang.Class({
     },
 
     _searchCancelled: function() {
-        this._showPage(this._showAppsButton.checked ? this._appsPage
-                                                    : this._workspacesPage);
+        this._showPage(this._showAppsButton.checked ?
+                       this._appsPage : this._workspacesPage,
+                       true);
 
         // Leave the entry focused when it doesn't have any text;
         // when replacing a selected search term, Clutter emits
@@ -470,7 +472,7 @@ const ViewSelector = new Lang.Class({
         let terms = getTermsForSearchString(this._entry.get_text());
 
         this._searchResults.setTerms(terms);
-        this._showPage(this._searchPage);
+        this._showPage(this._searchPage, true);
 
         return GLib.SOURCE_REMOVE;
     },
