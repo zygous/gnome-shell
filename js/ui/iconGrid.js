@@ -10,19 +10,25 @@ const St = imports.gi.St;
 const Lang = imports.lang;
 const Params = imports.misc.params;
 const Tweener = imports.ui.tweener;
+const Main = imports.ui.main;
 
 const ICON_SIZE = 96;
 const MIN_ICON_SIZE = 16;
 
 const EXTRA_SPACE_ANIMATION_TIME = 0.25;
 
-const ANIMATION_TIME_IN = 0.400;
-const ANIMATION_MAX_DELAY_FOR_ITEM = 0.250;
+const ANIMATION_TIME_IN = 0.350;
+const ANIMATION_TIME_OUT = 1/2 * ANIMATION_TIME_IN;
+const ANIMATION_MAX_DELAY_FOR_ITEM = 2/3 * ANIMATION_TIME_IN;
+const ANIMATION_MAX_DELAY_OUT_FOR_ITEM = 2/3 * ANIMATION_TIME_OUT;
+const ANIMATION_FADE_IN_TIME_FOR_ITEM = 1/4 * ANIMATION_TIME_IN;
 
 const ANIMATION_APPEAR_ICON_SCALE = 1.1;
 
 const ANIMATION_TYPE_APPEAR = 1;
+const ANIMATION_TYPE_SWARM_SPRING = 2;
 
+const ANIMATION_DIRECTION_OUT = 0;
 const ANIMATION_DIRECTION_IN = 1;
 
 const BaseIcon = new Lang.Class({
@@ -364,6 +370,9 @@ const IconGrid = new Lang.Class({
         this._animating = true;
 
         switch (animationType) {
+            case ANIMATION_TYPE_SWARM_SPRING:
+                this._animateSwarmSpring(actors, animationDirection, params.sourcePosition, params.sourceSize);
+                break;
             case ANIMATION_TYPE_APPEAR:
                 this._animateAppear(actors, animationDirection);
                 break;
@@ -410,16 +419,129 @@ const IconGrid = new Lang.Class({
                                                      scale_x: 1,
                                                      scale_y: 1,
                                                      onComplete: Lang.bind(this, function() {
-                                                        if (isLastActor)
+                                                        if (isLastActor) {
                                                             this._animating = false;
+                                                            this.emit('animation-done');
+                                                        }
                                                         actor.opacity = 255;
                                                         actorClone.destroy();
-                                                        this.emit('animation-done');
                                                     })
                                                    });
                               })
                             });
         }
+    },
+
+    _animateSwarmSpring: function(actors, animationDirection, sourcePosition, sourceSize) {
+        let distances = actors.map(Lang.bind(this, function(actor) {
+            return this._distance(actor.get_transformed_position(), sourcePosition);
+        }));
+        let maxDist = Math.max.apply(Math, distances);
+        let minDist = Math.min.apply(Math, distances);
+        let normalization = maxDist - minDist;
+
+        for (let index = 0; index < actors.length; index++) {
+            // FIXME? Seems that putting the actors at opacity 0
+            // for animating seems like it doesn't belongs here.
+            // But works well.
+            actors[index].opacity = 0;
+
+            let actorClone = new Clutter.Clone({ source: actors[index],
+                                                 reactive: false });
+            Main.uiGroup.add_actor(actorClone);
+
+            actorClone.set_pivot_point(0.0, 0.0);
+            let [width, height] = actors[index].get_transformed_size();
+            actorClone.set_size(width, height);
+            let scaleX = sourceSize[0] / width;
+            let scaleY = sourceSize[1] / height;
+
+            // Defeat onComplete anonymous function closure
+            let actor = actors[index];
+            let isLastItem = index == actors.length - 1;
+
+            let movementParams, fadeParams;
+
+            // Center the actor on the source position, expecting sourcePosition to be the center
+            // where the actor should be. In this way we avoid misaligments if the source actor size changes
+            // or is diferent that it should be. (hint: for the AllView and FrequentView animations the
+            // sourceSize is not exactly the actor size, since we want smaller actors to be animated due to
+            // design decision)
+            let adjustedSourcePosition = [sourcePosition[0] - sourceSize[0] / 2, sourcePosition[1] - sourceSize[1] / 2];
+
+            if (animationDirection == ANIMATION_DIRECTION_IN) {
+                actorClone.opacity = 0;
+                actorClone.set_scale(scaleX, scaleY);
+
+                actorClone.set_position(adjustedSourcePosition[0], adjustedSourcePosition[1]);
+
+                let delay = (1 - (distances[index] - minDist) / normalization) * ANIMATION_MAX_DELAY_FOR_ITEM;
+                let [finalX, finalY]  = actors[index].get_transformed_position();
+                movementParams = { time: ANIMATION_TIME_IN,
+                                   transition: 'easeInOutQuad',
+                                   delay: delay,
+                                   x: finalX,
+                                   y: finalY,
+                                   scale_x: 1,
+                                   scale_y: 1,
+                                   onComplete: Lang.bind(this, function() {
+                                       if (isLastItem){
+                                           this._animating = false;
+                                           this.emit('animation-done');
+                                       }
+                                       actor.opacity = 255;
+                                       actorClone.destroy();
+                                   })};
+                fadeParams = { time: ANIMATION_FADE_IN_TIME_FOR_ITEM,
+                               transition: 'easeInOutQuad',
+                               delay: delay,
+                               opacity: 255 };
+            } else {
+                let [startX, startY]  = actors[index].get_transformed_position();
+                actorClone.set_position(startX, startY);
+
+                let delay = (distances[index] - minDist) / normalization * ANIMATION_MAX_DELAY_OUT_FOR_ITEM;
+                movementParams = { time: ANIMATION_TIME_OUT,
+                                   transition: 'easeInOutQuad',
+                                   delay: delay,
+                                   x: adjustedSourcePosition[0],
+                                   y: adjustedSourcePosition[1],
+                                   scale_x: scaleX,
+                                   scale_y: scaleY,
+                                   onComplete: Lang.bind(this, function() {
+                                       if (isLastItem) {
+                                           this._animating = false;
+                                           this.emit('animation-done');
+                                           this._restoreItemsOpacity();
+                                       }
+                                       actorClone.destroy();
+                                   })};
+                fadeParams = { time: ANIMATION_FADE_IN_TIME_FOR_ITEM,
+                               transition: 'easeInOutQuad',
+                               delay: ANIMATION_TIME_OUT + delay - ANIMATION_FADE_IN_TIME_FOR_ITEM,
+                               opacity: 0 };
+            }
+
+
+            Tweener.addTween(actorClone, movementParams);
+            Tweener.addTween(actorClone, fadeParams);
+        }
+    },
+
+
+    /**
+     * FIXME?: We assume the icons use full opacity.
+     **/
+    _restoreItemsOpacity: function() {
+        for (let index = 0; index < this._items.length; index++) {
+            this._items[index].actor.opacity = 255;
+        }
+    },
+
+    _distance: function(point1, point2) {
+        let x = point1[0] - point2[0];
+        let y = point1[1] - point2[1];
+        return Math.sqrt(x * x + y * y);
     },
 
     _calculateChildBox: function(child, x, y, box) {
@@ -692,6 +814,14 @@ const PaginatedIconGrid = new Lang.Class({
         }
     },
 
+    animate: function(animationType, animationDirection, params) {
+        params = Params.parse(params, { page: 0,
+                                        sourcePosition: null,
+                                        sourceSize: null });
+
+        this._animateReal(this._getChildrenInPage(params.page), animationType, animationDirection, params);
+    },
+
     _computePages: function (availWidthPerPage, availHeightPerPage) {
         let [nColumns, usedWidth] = this._computeLayout(availWidthPerPage);
         let nRows;
@@ -745,6 +875,20 @@ const PaginatedIconGrid = new Lang.Class({
             return 0;
         }
         return Math.floor(index / this._childrenPerPage);
+    },
+
+    _getChildrenInPage: function(pageNumber) {
+        let children = this._getVisibleChildren();
+
+        let firstIndex = this._childrenPerPage * pageNumber;
+        let indexOffset = 0;
+        let childrenInPage = []
+
+        while (indexOffset < this._childrenPerPage && firstIndex + indexOffset < children.length) {
+               childrenInPage.push(children[firstIndex + indexOffset]);
+               indexOffset++;
+        }
+        return childrenInPage;
     },
 
     /**

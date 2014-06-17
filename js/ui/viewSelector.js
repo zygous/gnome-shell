@@ -19,6 +19,7 @@ const Search = imports.ui.search;
 const ShellEntry = imports.ui.shellEntry;
 const Tweener = imports.ui.tweener;
 const WorkspacesView = imports.ui.workspacesView;
+const IconGrid = imports.ui.iconGrid;
 
 const SHELL_KEYBINDINGS_SCHEMA = 'org.gnome.shell.keybindings';
 
@@ -230,11 +231,23 @@ const ViewSelector = new Lang.Class({
     _animateIn: function(page) {
         page.show();
 
-        this._fadePageIn(page);
+        if (page == this._appsPage) {
+            // Restore opacity of the page, since we could took the opacity
+            // on _fadePageIn if we didn't use swarm animation to animate out.
+            page.opacity = 255;
+            this.appDisplay.animate(IconGrid.ANIMATION_DIRECTION_IN);
+        } else {
+            this._fadePageIn(page);
+        }
     },
 
     _animateOut: function(page, onComplete) {
-        this._fadePageOut(page, onComplete);
+        if (page == this._appsPage) {
+            this.appDisplay.animate(IconGrid.ANIMATION_DIRECTION_OUT,
+                                    onComplete);
+        } else {
+            this._fadePageOut(page, onComplete);
+        }
     },
 
     _hidePageAndSyncEmpty: function(page) {

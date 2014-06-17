@@ -440,6 +440,49 @@ const AllView = new Lang.Class({
         this._refilterApps();
     },
 
+    animate: function(animationDirection, onCompleteOut) {
+        let dashPosition = Main.overview._dash._showAppsIcon.get_transformed_position();
+        let dashSize = Main.overview._dash._showAppsIcon.get_transformed_size();
+        let centerDashPosition = [dashPosition[0] + dashSize[0] / 2, dashPosition[1] + dashSize[1] / 2];
+        // Design decision, 1/2 of the dash icon size.
+        let dashScaledSize = [dashSize[0] / 2, dashSize[1] / 2];
+        let gridAnimationFunction = Lang.bind(this,
+            function() {
+                this._grid.animate(IconGrid.ANIMATION_TYPE_SWARM_SPRING,
+                                   animationDirection,
+                                   { sourcePosition: centerDashPosition,
+                                     sourceSize: dashScaledSize,
+                                     page: this._currentPage })
+            });
+        if (animationDirection == IconGrid.ANIMATION_DIRECTION_IN) {
+            let toAnimate = this._grid.actor.connect('notify::allocation', Lang.bind(this,
+                function() {
+                    if (this._grid.actor.mapped) {
+                        this._grid.actor.disconnect(toAnimate);
+                        gridAnimationFunction();
+                    }
+                }));
+        } else {
+            let animationDoneId = this._grid.connect('animation-done', Lang.bind(this,
+                function () {
+                    this._grid.disconnect(animationDoneId);
+                    if (onCompleteOut)
+                        onCompleteOut();
+                }));
+
+            if (this._displayingPopup && this._currentPopup) {
+                this._currentPopup.popdown();
+                let spaceClosedId = this._grid.connect('space-closed', Lang.bind(this,
+                    function() {
+                        this._grid.disconnect(spaceClosedId);
+                        gridAnimationFunction();
+                    }));
+            } else {
+                gridAnimationFunction();
+            }
+        }
+    },
+
     getCurrentPageY: function() {
         return this._grid.getPageY(this._currentPage);
     },
@@ -681,6 +724,38 @@ const FrequentView = new Lang.Class({
         }
     },
 
+    animate: function(animationDirection, onCompleteOut) {
+        let dashPosition = Main.overview._dash._showAppsIcon.get_transformed_position();
+        let dashSize = Main.overview._dash._showAppsIcon.get_transformed_size();
+        let centerDashPosition = [dashPosition[0] + dashSize[0] / 2, dashPosition[1] + dashSize[1] / 2];
+        // Design decision, 1/2 of the dash icon size.
+        let dashScaledSize = [dashSize[0] / 2, dashSize[1] / 2];
+        let gridAnimationFunction = Lang.bind(this, function() {
+            this._grid.animate(IconGrid.ANIMATION_TYPE_SWARM_SPRING,
+                               animationDirection,
+                               { sourcePosition: centerDashPosition,
+                                 sourceSize: dashScaledSize });
+        });
+
+        if (animationDirection == IconGrid.ANIMATION_DIRECTION_IN) {
+            let toAnimate = this._grid.actor.connect('notify::allocation', Lang.bind(this,
+                function() {
+                    if (this._grid.actor.mapped) {
+                        this._grid.actor.disconnect(toAnimate);
+                        gridAnimationFunction();
+                    }
+                }));
+        } else {
+            let animationDoneId = this._grid.connect('animation-done', Lang.bind(this,
+                function () {
+                    this._grid.disconnect(animationDoneId);
+                    if (onCompleteOut)
+                        onCompleteOut();
+                }));
+            gridAnimationFunction();
+        }
+    },
+
     // Called before allocation to calculate dynamic spacing
     adaptToSize: function(width, height) {
         let box = new Clutter.ActorBox();
@@ -797,6 +872,25 @@ const AppDisplay = new Lang.Class({
             initialView = Views.ALL;
         this._showView(initialView);
         this._updateFrequentVisibility();
+    },
+
+    animate: function(animationDirection, onCompleteOut) {
+        let view = this._views[global.settings.get_uint('app-picker-view')].view;
+
+        // Animate controls opacity using swarm time, since it will be
+        // the time the AllView or FrequentView takes to show it entirely.
+        let finalOpacity;
+        if (animationDirection == IconGrid.ANIMATION_DIRECTION_IN) {
+            this._controls.opacity = 0;
+            finalOpacity = 255;
+        } else {
+            finalOpacity = 0
+        }
+        Tweener.addTween(this._controls,
+                         { time: IconGrid.ANIMATION_TIME_IN,
+                           transition: 'easeInOutQuad',
+                           opacity: finalOpacity });
+        view.animate(animationDirection, onCompleteOut);
     },
 
     _showView: function(activeIndex) {
@@ -947,7 +1041,7 @@ const FolderView = new Lang.Class({
     _keyFocusIn: function(actor) {
         Util.ensureActorVisibleInScrollView(this.actor, actor);
     },
-    
+
     animate: function(animationType, animationDirection, params) {
         this._grid.animate(animationType, animationDirection, params);
     },
@@ -1282,13 +1376,13 @@ const AppFolderPopup = new Lang.Class({
         this.actor.show();
 
         this._boxPointer.setArrowActor(this._source.actor);
-        // We need to hide the icons of the view until the boxpointer animation 
+        // We need to hide the icons of the view until the boxpointer animation
         // is completed so we can animate the icons after as we like withouth
         // showing them while boxpointer is animating.
         this._view.actor.opacity = 0;
         this._boxPointer.show(BoxPointer.PopupAnimation.FADE |
                               BoxPointer.PopupAnimation.SLIDE,
-                              Lang.bind(this, 
+                              Lang.bind(this,
             function() {
                 // Restore the view opacity, so now we show the icons and animate
                 // them
