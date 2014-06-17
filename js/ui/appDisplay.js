@@ -947,6 +947,10 @@ const FolderView = new Lang.Class({
     _keyFocusIn: function(actor) {
         Util.ensureActorVisibleInScrollView(this.actor, actor);
     },
+    
+    animate: function(animationType, animationDirection, params) {
+        this._grid.animate(animationType, animationDirection, params);
+    },
 
     createFolderIcon: function(size) {
         let layout = new Clutter.TableLayout();
@@ -1278,8 +1282,22 @@ const AppFolderPopup = new Lang.Class({
         this.actor.show();
 
         this._boxPointer.setArrowActor(this._source.actor);
+        // We need to hide the icons of the view until the boxpointer animation 
+        // is completed so we can animate the icons after as we like withouth
+        // showing them while boxpointer is animating.
+        this._view.actor.opacity = 0;
         this._boxPointer.show(BoxPointer.PopupAnimation.FADE |
-                              BoxPointer.PopupAnimation.SLIDE);
+                              BoxPointer.PopupAnimation.SLIDE,
+                              Lang.bind(this, 
+            function() {
+                // Restore the view opacity, so now we show the icons and animate
+                // them
+                this._view.actor.opacity = 255;
+                this._view.animate(IconGrid.ANIMATION_TYPE_APPEAR,
+                                   IconGrid.ANIMATION_DIRECTION_IN,
+                                   { sourcePosition: this._source.actor.get_transformed_position(),
+                                     sourceSize: this._source.actor.get_transformed_size() });
+            }));
 
         this.actor.navigate_focus(null, Gtk.DirectionType.TAB_FORWARD, false);
 
@@ -1293,7 +1311,8 @@ const AppFolderPopup = new Lang.Class({
         this._grabHelper.ungrab({ actor: this.actor });
 
         this._boxPointer.hide(BoxPointer.PopupAnimation.FADE |
-                              BoxPointer.PopupAnimation.SLIDE);
+                              BoxPointer.PopupAnimation.SLIDE,
+                              this._view.animateOut);
         this._isOpen = false;
         this.emit('open-state-changed', false);
     },

@@ -16,6 +16,15 @@ const MIN_ICON_SIZE = 16;
 
 const EXTRA_SPACE_ANIMATION_TIME = 0.25;
 
+const ANIMATION_TIME_IN = 0.400;
+const ANIMATION_MAX_DELAY_FOR_ITEM = 0.250;
+
+const ANIMATION_APPEAR_ICON_SCALE = 1.1;
+
+const ANIMATION_TYPE_APPEAR = 1;
+
+const ANIMATION_DIRECTION_IN = 1;
+
 const BaseIcon = new Lang.Class({
     Name: 'BaseIcon',
 
@@ -335,6 +344,81 @@ const IconGrid = new Lang.Class({
             } else {
                 x += this._getHItemSize() + spacing;
             }
+        }
+    },
+
+    /**
+     * Intended to be override by subclasses if they need a diferent
+     * set of items to be animated.
+     */
+    animate: function(animationType, animationDirection, params) {
+        params = Params.parse(params, { sourcePosition: null,
+                                        sourceSize: null });
+
+        this._animateReal(this._getVisibleChildren(), animationType, animationDirection, params);
+    },
+
+    _animateReal: function(actors, animationType, animationDirection, params) {
+        if (this._animating || actors.length == 0)
+            return;
+        this._animating = true;
+
+        switch (animationType) {
+            case ANIMATION_TYPE_APPEAR:
+                this._animateAppear(actors, animationDirection);
+                break;
+            default:
+                break;
+        }
+    },
+
+    _animateAppear: function(actors, animationDirection) {
+        for (let index = 0; index < actors.length; index++) {
+            // FIXME? Seems that putting the items at opacity 0
+            // for animating seems like it doesn't belongs here.
+            // But works well.
+            actors[index].opacity = 0;
+            let delay = index / actors.length * ANIMATION_MAX_DELAY_FOR_ITEM;
+
+            let [originalX, originalY] = actors[index].get_transformed_position();
+            let [originalWidth, originalHeight] = actors[index].get_transformed_size();
+
+            let actorClone = new Clutter.Clone({ source: actors[index],
+                                                reactive: false });
+            Main.uiGroup.add_actor(actorClone);
+
+            actorClone.reactive = false;
+            actorClone.set_position(originalX, originalY);
+            actorClone.set_scale(0, 0);
+            actorClone.set_pivot_point(0.5, 0.5);
+            let [width, height] = actors[index].get_transformed_size();
+            actorClone.set_size(width, height);
+
+            // Defeat onComplete anonymous function closure
+            let actor= actors[index];
+            let isLastActor= index == actors.length - 1;
+            Tweener.addTween(actorClone,
+                            { time: ANIMATION_TIME_IN / 4,
+                              transition: 'easeInOutQuad',
+                              delay: delay,
+                              scale_x: ANIMATION_APPEAR_ICON_SCALE,
+                              scale_y: ANIMATION_APPEAR_ICON_SCALE,
+                              onComplete: Lang.bind(this, function() {
+                                  Tweener.addTween(actorClone,
+                                                   { time: ANIMATION_TIME_IN - ANIMATION_TIME_IN / 4,
+                                                     transition: 'easeInOutQuad',
+                                                     scale_x: 1,
+                                                     scale_y: 1,
+                                                     onComplete: Lang.bind(this, function() {
+                                                        if (isLastActor)
+                                                            this._animating = false;
+                                                        actor.opacity = 255;
+                                                        actorClone.destroy();
+                                                        this.emit('animation-done');
+                                                    })
+                                                   });
+                              })
+                            });
         }
     },
 
