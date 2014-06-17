@@ -46,6 +46,15 @@ const INDICATORS_BASE_TIME = 0.25;
 const INDICATORS_ANIMATION_DELAY = 0.125;
 const INDICATORS_ANIMATION_MAX_TIME = 0.75;
 
+// Since we will animate the page indicators only when aniamting with swarm too,
+// make the time of the animation consistent with the swarm one which is divided
+// by two to make the out animation. Also, make sure we don't exceed swarm animation
+// total time.
+const INDICATORS_BASE_TIME_OUT = 0.125;
+const INDICATORS_ANIMATION_DELAY_OUT = 0.0625;
+const INDICATORS_ANIMATION_MAX_TIME_OUT = IconGrid.ANIMATION_TIME_OUT +
+                                          IconGrid.ANIMATION_MAX_DELAY_OUT_FOR_ITEM;
+
 const PAGE_SWITCH_TIME = 0.3;
 
 const VIEWS_SWITCH_TIME = 0.4;
@@ -199,7 +208,11 @@ const PageIndicators = new Lang.Class({
         this._currentPage = undefined;
 
         this.actor.connect('notify::mapped',
-                           Lang.bind(this, this._animateIndicators));
+                           Lang.bind(this,
+            function() {
+                if (this.actor.mapped)
+                    this._animateIndicatorsIn();
+            }));
     },
 
     setNPages: function(nPages) {
@@ -240,10 +253,7 @@ const PageIndicators = new Lang.Class({
             children[i].set_checked(i == this._currentPage);
     },
 
-    _animateIndicators: function() {
-        if (!this.actor.mapped)
-            return;
-
+    _animateIndicatorsIn: function() {
         let children = this.actor.get_children();
         if (children.length == 0)
             return;
@@ -266,6 +276,31 @@ const PageIndicators = new Lang.Class({
                                time: INDICATORS_BASE_TIME + delay * i,
                                transition: 'easeInOutQuad',
                                delay: VIEWS_SWITCH_ANIMATION_DELAY
+                             });
+        }
+    },
+
+    animateIndicatorsOut: function() {
+        let children = this.actor.get_children();
+        if (children.length == 0)
+            return;
+
+        let offset;
+        if (this.actor.get_text_direction() == Clutter.TextDirection.RTL)
+            offset = -children[0].width;
+        else
+            offset = children[0].width;
+
+        let delay = INDICATORS_ANIMATION_DELAY;
+        let totalAnimationTime = INDICATORS_BASE_TIME_OUT + INDICATORS_ANIMATION_DELAY_OUT * this._nPages;
+        if (totalAnimationTime > INDICATORS_ANIMATION_MAX_TIME_OUT)
+            delay -= (totalAnimationTime - INDICATORS_ANIMATION_MAX_TIME_OUT) / this._nPages;
+
+        for (let i = 0; i < this._nPages; i++) {
+            Tweener.addTween(children[i],
+                             { translation_x: offset,
+                               time: INDICATORS_BASE_TIME_OUT + delay * i,
+                               transition: 'easeInOutQuad'
                              });
         }
     }
@@ -487,9 +522,11 @@ const AllView = new Lang.Class({
                 let spaceClosedId = this._grid.connect('space-closed', Lang.bind(this,
                     function() {
                         this._grid.disconnect(spaceClosedId);
+                        this._pageIndicators.animateIndicatorsOut();
                         gridAnimationFunction();
                     }));
             } else {
+                this._pageIndicators.animateIndicatorsOut();
                 gridAnimationFunction();
             }
         }
