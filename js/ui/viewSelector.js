@@ -206,18 +206,41 @@ const ViewSelector = new Lang.Class({
         return page;
     },
 
-    _fadePageIn: function(oldPage) {
-        if (oldPage)
-            oldPage.hide();
+    _fadePageIn: function(page) {
+        Tweener.addTween(page,
+                         { opacity: 255,
+                           time: OverviewControls.SIDE_CONTROLS_ANIMATION_TIME,
+                           transition: 'easeOutQuad'
+                         });
+    },
 
+    _fadePageOut: function(page, onComplete) {
+        Tweener.addTween(page,
+                         { opacity: 0,
+                           time: OverviewControls.SIDE_CONTROLS_ANIMATION_TIME,
+                           transition: 'easeOutQuad',
+                           onComplete: Lang.bind(this,
+                               function() {
+                                    if (onComplete)
+                                        onComplete();
+                               })
+                         });
+    },
+
+    _animateIn: function(page) {
+        page.show();
+
+        this._fadePageIn(page);
+    },
+
+    _animateOut: function(page, onComplete) {
+        this._fadePageOut(page, onComplete);
+    },
+
+    _hidePageAndSyncEmpty: function(page) {
+        if (page)
+            page.hide();
         this.emit('page-empty');
-
-        this._activePage.show();
-        Tweener.addTween(this._activePage,
-            { opacity: 255,
-              time: OverviewControls.SIDE_CONTROLS_ANIMATION_TIME,
-              transition: 'easeOutQuad'
-            });
     },
 
     _showPage: function(page, animateOut) {
@@ -228,18 +251,16 @@ const ViewSelector = new Lang.Class({
         this._activePage = page;
         this.emit('page-changed');
 
+        let animateActivePage = Lang.bind(this,
+            function() {
+                this._hidePageAndSyncEmpty(oldPage);
+                this._animateIn(this._activePage);
+            });
+
         if (oldPage && animateOut)
-            Tweener.addTween(oldPage,
-                             { opacity: 0,
-                               time: OverviewControls.SIDE_CONTROLS_ANIMATION_TIME,
-                               transition: 'easeOutQuad',
-                               onComplete: Lang.bind(this,
-                                   function() {
-                                       this._fadePageIn(oldPage);
-                                   })
-                             });
+            this._animateOut(oldPage, animateActivePage)
         else
-            this._fadePageIn(oldPage);
+            animateActivePage();
     },
 
     _a11yFocusPage: function(page) {
