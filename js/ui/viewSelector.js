@@ -228,10 +228,10 @@ const ViewSelector = new Lang.Class({
                          });
     },
 
-    _animateIn: function(page) {
+    _animateIn: function(page, oldPage) {
         page.show();
 
-        if (page == this._appsPage) {
+        if (page == this._appsPage && oldPage == this._workspacesPage) {
             // Restore opacity of the page, since we could took the opacity
             // on _fadePageIn if we didn't use swarm animation to animate out.
             page.opacity = 255;
@@ -241,8 +241,8 @@ const ViewSelector = new Lang.Class({
         }
     },
 
-    _animateOut: function(page, onComplete) {
-        if (page == this._appsPage) {
+    _animateOut: function(page, newPage, onComplete) {
+        if (page == this._appsPage && newPage == this._workspacesPage) {
             this.appDisplay.animate(IconGrid.ANIMATION_DIRECTION_OUT,
                                     onComplete);
         } else {
@@ -267,11 +267,11 @@ const ViewSelector = new Lang.Class({
         let animateActivePage = Lang.bind(this,
             function() {
                 this._hidePageAndSyncEmpty(oldPage);
-                this._animateIn(this._activePage);
+                this._animateIn(page, oldPage);
             });
 
         if (oldPage && animateOut)
-            this._animateOut(oldPage, animateActivePage)
+            this._animateOut(oldPage, page, animateActivePage)
         else
             animateActivePage();
     },
