@@ -34,7 +34,10 @@ const MIN_COLUMNS = 4;
 const MIN_ROWS = 4;
 
 const INACTIVE_GRID_OPACITY = 77;
-const INACTIVE_GRID_OPACITY_ANIMATION_TIME = 0.40;
+// This time needs to be less than IconGrid.EXTRA_SPACE_ANIMATION_TIME
+// to not clash this opacity animation with the swarm animation putting
+// opacity 0 to items.
+const INACTIVE_GRID_OPACITY_ANIMATION_TIME = 0.24;
 const FOLDER_SUBICON_FRACTION = .4;
 
 const MIN_FREQUENT_APPS_COUNT = 3;
