@@ -731,7 +731,10 @@ const IconGrid = new Lang.Class({
             this._updateSpacingForSize(availWidth, availHeight);
         }
         let scale = Math.min(this._fixedHItemSize, this._fixedVItemSize) / Math.max(this._hItemSize, this._vItemSize);
-        Meta.later_add(Meta.LaterType.BEFORE_REDRAW, Lang.bind(this, function() { this._updateChildrenScale(scale); }));
+
+        if (this._updateIconSizeId)
+            Meta.later_remove(this._updateIconSizeId);
+        this._updateIconSizeId = Meta.later_add(Meta.LaterType.RESIZE, Lang.bind(this, function() { this._updateChildrenScale(scale); }));
     },
 
     // Note that this is ICON_SIZE as used by BaseIcon, not elsewhere in IconGrid; it's a bit messed up
