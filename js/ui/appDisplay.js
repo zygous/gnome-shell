@@ -459,7 +459,16 @@ const AllView = new Lang.Class({
                 function() {
                     if (this._grid.actor.mapped) {
                         this._grid.actor.disconnect(toAnimate);
-                        gridAnimationFunction();
+                        // We need to avoid the clutter allocation loop, so we use
+                        // a call before redraw, but also we need to hide items
+                        // to not show them for a moment before the animation is
+                        // started
+                        this._grid.actor.opacity = 0;
+                        Meta.later_add(Meta.LaterType.BEFORE_REDRAW, Lang.bind(this,
+                            function() {
+                                this._grid.actor.opacity = 255;
+                                gridAnimationFunction();
+                            }));
                     }
                 }));
         } else {
@@ -745,7 +754,16 @@ const FrequentView = new Lang.Class({
                 function() {
                     if (this._grid.actor.mapped) {
                         this._grid.actor.disconnect(toAnimate);
-                        gridAnimationFunction();
+                        // We need to avoid the clutter allocation loop, so we use
+                        // a call before redraw, but also we need to hide items
+                        // to not show them for a moment before the animation is
+                        // started
+                        this._grid.actor.opacity = 0;
+                        Meta.later_add(Meta.LaterType.BEFORE_REDRAW, Lang.bind(this,
+                            function() {
+                                this._grid.actor.opacity = 255;
+                                gridAnimationFunction();
+                            }));
                     }
                 }));
         } else {
