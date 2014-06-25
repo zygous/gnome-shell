@@ -231,24 +231,9 @@ const GridSearchResult = new Lang.Class({
         this.actor.style_class = 'grid-search-result';
 
         let content = provider.createResultObject(metaInfo);
-        let dragSource = null;
-
-        if (content == null) {
-            let actor = new St.Bin();
-            let icon = new IconGrid.BaseIcon(this.metaInfo['name'],
-                                             { createIcon: this.metaInfo['createIcon'] });
-            actor.set_child(icon.actor);
-            actor.label_actor = icon.label;
-            dragSource = icon.icon;
-            content = { actor: actor, icon: icon };
-        } else {
-            if (content._delegate && content._delegate.getDragActorSource)
-                dragSource = content._delegate.getDragActorSource();
-        }
+        this._dragActorSource = content;
 
         this.actor.set_child(content.actor);
-        this.actor.label_actor = content.actor.label_actor;
-        this.icon = content.icon;
 
         let draggable = DND.makeDraggable(this.actor);
         draggable.connect('drag-begin',
@@ -263,11 +248,6 @@ const GridSearchResult = new Lang.Class({
                           Lang.bind(this, function() {
                               Main.overview.endItemDrag(this);
                           }));
-
-        if (!dragSource)
-            // not exactly right, but alignment problems are hard to notice
-            dragSource = content;
-        this._dragActorSource = dragSource;
     },
 
     getDragActorSource: function() {
@@ -276,13 +256,6 @@ const GridSearchResult = new Lang.Class({
 
     getDragActor: function() {
         return this.metaInfo['createIcon'](Main.overview.dashIconSize);
-    },
-
-    shellWorkspaceLaunch: function(params) {
-        if (this.provider.dragActivateResult)
-            this.provider.dragActivateResult(this.metaInfo.id, params);
-        else
-            this.provider.activateResult(this.metaInfo.id, this.terms);
     }
 });
 
@@ -478,15 +451,6 @@ const GridSearchResults = new Lang.Class({
 
     _getMaxDisplayedResults: function() {
         return this._grid.columnsForWidth(this._bin.width) * this._grid.getRowLimit();
-    },
-
-    _renderResults: function(metas) {
-        for (let i = 0; i < metas.length; i++) {
-            let display = new GridSearchResult(this.provider, metas[i]);
-            display.connect('activate', Lang.bind(this, this._activateResult));
-            display.actor.connect('key-focus-in', Lang.bind(this, this._keyFocusIn));
-            this._grid.addItem(display);
-        }
     },
 
     _clearResultDisplay: function () {
