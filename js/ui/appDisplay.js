@@ -468,6 +468,9 @@ const AllView = new Lang.Class({
                     this._grid.disconnect(animationDoneId);
                     if (onCompleteOut)
                         onCompleteOut();
+                    // Reset to the default, so when we open again AllView it
+                    // opens in the page 0.
+                    this._currentPage = 0;
                 }));
 
             if (this._displayingPopup && this._currentPopup) {
