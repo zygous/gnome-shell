@@ -528,7 +528,8 @@ const Dash = new Lang.Class({
     _createAppItem: function(app) {
         let appIcon = new AppDisplay.AppIcon(app,
                                              { setSizeManually: true,
-                                               showLabel: false });
+                                               showLabel: false },
+                                             { animateOnNewWindow: true });
         appIcon._draggable.connect('drag-begin',
                                    Lang.bind(this, function() {
                                        appIcon.actor.opacity = 50;
