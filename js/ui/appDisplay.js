@@ -1470,10 +1470,11 @@ Signals.addSignalMethods(AppFolderPopup.prototype);
 const AppIcon = new Lang.Class({
     Name: 'AppIcon',
 
-    _init : function(app, iconParams) {
+    _init : function(app, iconParams, params) {
         this.app = app;
         this.id = app.get_id();
         this.name = app.get_name();
+        this.params = Params.parse(params, { animateOnNewWindow: false });
 
         this.actor = new St.Button({ style_class: 'app-well-app',
                                      reactive: true,
@@ -1633,6 +1634,9 @@ const AppIcon = new Lang.Class({
                             this.app.state == Shell.AppState.RUNNING ||
                             button && button == 2;
 
+        if (this.params.animateOnNewWindow &&
+            (this.app.state == Shell.AppState.STOPPED || openNewWindow))
+            this.animateOut();
 
         if (openNewWindow)
             this.app.open_new_window(-1);
@@ -1640,6 +1644,10 @@ const AppIcon = new Lang.Class({
             this.app.activate();
 
         Main.overview.hide();
+    },
+
+    animateOut: function() {
+        this.icon.animateOut();
     },
 
     shellWorkspaceLaunch : function(params) {
@@ -1729,6 +1737,10 @@ const AppIconMenu = new Lang.Class({
 
             this._newWindowMenuItem = this._appendMenuItem(_("New Window"));
             this._newWindowMenuItem.connect('activate', Lang.bind(this, function() {
+                if (this._source.params.animateOnNewWindow &&
+                    this._source.app.state == Shell.AppState.STOPPED)
+                    this._source.animateOut();
+
                 this._source.app.open_new_window(-1);
                 this.emit('activate-window', null);
             }));
