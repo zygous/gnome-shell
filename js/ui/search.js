@@ -144,47 +144,26 @@ const MaxWidthBin = new Lang.Class({
     }
 });
 
-const SearchResult = new Lang.Class({
-    Name: 'SearchResult',
+const ListSearchResult = new Lang.Class({
+    Name: 'ListSearchResult',
 
-    _init: function(provider, metaInfo) {
+    ICON_SIZE: 64,
+
+    _init: function(provider, metaInfo, terms) {
         this.provider = provider;
         this.metaInfo = metaInfo;
+        this._terms = terms;
 
         this.actor = new St.Button({ reactive: true,
                                      can_focus: true,
                                      track_hover: true,
                                      x_align: St.Align.START,
-                                     y_fill: true });
+                                     x_fill: true,
+                                     y_fill: true,
+                                     style_class: 'list-search-result'});
 
         this.actor._delegate = this;
         this.actor.connect('clicked', Lang.bind(this, this.activate));
-    },
-
-    activate: function() {
-        this.emit('activate', this.metaInfo.id);
-    },
-
-    setSelected: function(selected) {
-        if (selected)
-            this.actor.add_style_pseudo_class('selected');
-        else
-            this.actor.remove_style_pseudo_class('selected');
-    }
-});
-Signals.addSignalMethods(SearchResult.prototype);
-
-const ListSearchResult = new Lang.Class({
-    Name: 'ListSearchResult',
-    Extends: SearchResult,
-
-    ICON_SIZE: 64,
-
-    _init: function(provider, metaInfo) {
-        this.parent(provider, metaInfo);
-
-        this.actor.style_class = 'list-search-result';
-        this.actor.x_fill = true;
 
         let content = new St.BoxLayout({ style_class: 'list-search-result-content',
                                          vertical: false });
@@ -218,44 +197,31 @@ const ListSearchResult = new Lang.Class({
                                        x_align: St.Align.START,
                                        y_align: St.Align.END });
         }
+    },
+
+    activate: function() {
+        this.provider.activateResult(this.metaInfo.id, this._terms);
+        Main.overview.toggle();
+    },
+
+    setSelected: function(selected) {
+        if (selected)
+            this.actor.add_style_pseudo_class('selected');
+        else
+            this.actor.remove_style_pseudo_class('selected');
     }
 });
 
 const GridSearchResult = new Lang.Class({
     Name: 'GridSearchResult',
-    Extends: SearchResult,
 
-    _init: function(provider, metaInfo) {
-        this.parent(provider, metaInfo);
+    _init: function(provider, metaInfo, terms) {
+        this.provider = provider;
+        this.metaInfo = metaInfo;
 
-        this.actor.style_class = 'grid-search-result';
-
-        let content = provider.createResultObject(metaInfo);
-        this._dragActorSource = content;
-
-        this.actor.set_child(content.actor);
-
-        let draggable = DND.makeDraggable(this.actor);
-        draggable.connect('drag-begin',
-                          Lang.bind(this, function() {
-                              Main.overview.beginItemDrag(this);
-                          }));
-        draggable.connect('drag-cancelled',
-                          Lang.bind(this, function() {
-                              Main.overview.cancelledItemDrag(this);
-                          }));
-        draggable.connect('drag-end',
-                          Lang.bind(this, function() {
-                              Main.overview.endItemDrag(this);
-                          }));
-    },
-
-    getDragActorSource: function() {
-        return this._dragActorSource;
-    },
-
-    getDragActor: function() {
-        return this.metaInfo['createIcon'](Main.overview.dashIconSize);
+        // Expect an AppIcon which already takes management of drag,
+        // activation, selection, etc.
+        this.actor = provider.createResultObject(metaInfo).actor;
     }
 });
 
@@ -302,11 +268,6 @@ const SearchResultsBase = new Lang.Class({
         this.emit('key-focus-in', actor);
     },
 
-    _activateResult: function(result, id) {
-        this.provider.activateResult(id, this._terms);
-        Main.overview.toggle();
-    },
-
     _setMoreIconVisible: function(visible) {
     },
 
@@ -335,7 +296,6 @@ const SearchResultsBase = new Lang.Class({
                 metasNeeded.forEach(Lang.bind(this, function(resultId, i) {
                     let meta = metas[i];
                     let display = this._createResultDisplay(meta);
-                    display.connect('activate', Lang.bind(this, this._activateResult));
                     display.actor.connect('key-focus-in', Lang.bind(this, this._keyFocusIn));
                     this._resultDisplays[resultId] = display;
                 }));
@@ -418,7 +378,7 @@ const ListSearchResults = new Lang.Class({
     },
 
     _createResultDisplay: function(meta) {
-        return new ListSearchResult(this.provider, meta);
+        return new ListSearchResult(this.provider, meta, this._terms);
     },
 
     _addItem: function(display) {
@@ -458,7 +418,7 @@ const GridSearchResults = new Lang.Class({
     },
 
     _createResultDisplay: function(meta) {
-        return new GridSearchResult(this.provider, meta);
+        return new GridSearchResult(this.provider, meta, this._terms);
     },
 
     _addItem: function(display) {

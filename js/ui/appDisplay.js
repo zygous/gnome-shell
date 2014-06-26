@@ -1049,26 +1049,6 @@ const AppSearchProvider = new Lang.Class({
         this.getInitialResultSet(terms, callback, cancellable);
     },
 
-    activateResult: function(result) {
-        let app = this._appSys.lookup_app(result);
-        let event = Clutter.get_current_event();
-        let modifiers = event ? event.get_state() : 0;
-        let openNewWindow = modifiers & Clutter.ModifierType.CONTROL_MASK;
-
-        if (openNewWindow)
-            app.open_new_window(-1);
-        else
-            app.activate();
-    },
-
-    dragActivateResult: function(id, params) {
-        params = Params.parse(params, { workspace: -1,
-                                        timestamp: 0 });
-
-        let app = this._appSys.lookup_app(id);
-        app.open_new_window(workspace);
-    },
-
     createResultObject: function (resultMeta) {
         let app = this._appSys.lookup_app(resultMeta['id']);
         return new AppIcon(app);
@@ -1589,13 +1569,9 @@ const AppIcon = new Lang.Class({
 
     _onClicked: function(actor, button) {
         this._removeMenuTimeout();
+        this.activate(button);
+        Main.overview.hide();
 
-        if (button == 1) {
-            this._onActivate(Clutter.get_current_event());
-        } else if (button == 2) {
-            this.app.open_new_window(-1);
-            Main.overview.hide();
-        }
         return false;
     },
 
@@ -1650,15 +1626,18 @@ const AppIcon = new Lang.Class({
         this.emit('menu-state-changed', false);
     },
 
-    _onActivate: function (event) {
-        let modifiers = event.get_state();
+    activate: function (button) {
+        let event = Clutter.get_current_event();
+        let modifiers = event ? event.get_state() : 0;
+        let openNewWindow = modifiers & Clutter.ModifierType.CONTROL_MASK &&
+                            this.app.state == Shell.AppState.RUNNING ||
+                            button && button == 2;
 
-        if (modifiers & Clutter.ModifierType.CONTROL_MASK
-            && this.app.state == Shell.AppState.RUNNING) {
+
+        if (openNewWindow)
             this.app.open_new_window(-1);
-        } else {
+        else
             this.app.activate();
-        }
 
         Main.overview.hide();
     },
@@ -1683,6 +1662,13 @@ const AppIcon = new Lang.Class({
     shouldShowTooltip: function() {
         return this.actor.hover && (!this._menu || !this._menu.isOpen);
     },
+
+    setSelected: function(selected) {
+        if (selected)
+            this.actor.add_style_pseudo_class('selected');
+        else
+            this.actor.remove_style_pseudo_class('selected');
+    }
 });
 Signals.addSignalMethods(AppIcon.prototype);
 

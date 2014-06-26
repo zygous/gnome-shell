@@ -47,8 +47,7 @@ stage {
 .window-caption,
 .switcher-list,
 .app-well-app > .overview-icon,
-.show-apps > .overview-icon,
-.grid-search-result .overview-icon {
+.show-apps > .overview-icon {
     font-size: 9pt;
     font-weight: bold;
 }
@@ -1078,8 +1077,7 @@ StScrollBar StButton#vhandle:active {
     background-image: url("more-results.svg");
 }
 
-.app-well-app > .overview-icon.overview-icon-with-label,
-.grid-search-result .overview-icon.overview-icon-with-label {
+.app-well-app > .overview-icon.overview-icon-with-label {
     /* since the label controls its own spacing, it is visually more
     consistent to use different padding values for top and bottom */
     padding: 10px 8px 5px 8px;
@@ -1089,8 +1087,7 @@ StScrollBar StButton#vhandle:active {
 .app-well-app > .overview-icon,
 .show-apps > .overview-icon,
 .search-provider-icon,
-.list-search-result,
-.grid-search-result .overview-icon {
+.list-search-result {
     border-radius: 4px;
     padding: 6px;
     border: 1px rgba(0,0,0,0);
@@ -1126,8 +1123,7 @@ StScrollBar StButton#vhandle:active {
 .app-well-app:hover > .overview-icon,
 .show-apps:hover > .overview-icon,
 .search-provider-icon:hover,
-.list-search-result:hover,
-.grid-search-result:hover .overview-icon {
+.list-search-result:hover {
     background-color: rgba(255,255,255,0.1);
     text-shadow: black 0px 2px 2px;
     transition-duration: 100ms;
@@ -1175,12 +1171,10 @@ StScrollBar StButton#vhandle:active {
 }
 
 .app-well-app:focus > .overview-icon,
-.grid-search-result:focus .overview-icon,
 .show-apps:focus > .overview-icon,
 .search-provider-icon:focus,
 .list-search-result:focus,
 .app-well-app:selected > .overview-icon,
-.grid-search-result:selected .overview-icon,
 .search-provider-icon:selected,
 .list-search-result:selected {
     background-color: rgba(255,255,255,0.33);
