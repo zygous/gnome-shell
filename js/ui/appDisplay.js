@@ -1051,7 +1051,7 @@ const AppSearchProvider = new Lang.Class({
 
     createResultObject: function (resultMeta) {
         let app = this._appSys.lookup_app(resultMeta['id']);
-        return new AppIcon(app);
+        return new AppIcon(app, {}, { animateOnNewWindow: true });
     }
 });
 
