@@ -31,6 +31,9 @@ const ANIMATION_TYPE_SWARM_SPRING = 2;
 const ANIMATION_DIRECTION_OUT = 0;
 const ANIMATION_DIRECTION_IN = 1;
 
+const APPICON_ANIMATION_OUT_SCALE = 3;
+const APPICON_ANIMATION_OUT_TIME = 0.25;
+
 const BaseIcon = new Lang.Class({
     Name: 'BaseIcon',
 
@@ -54,23 +57,23 @@ const BaseIcon = new Lang.Class({
 
         this._spacing = 0;
 
-        let box = new Shell.GenericContainer();
-        box.connect('allocate', Lang.bind(this, this._allocate));
-        box.connect('get-preferred-width',
+        this._box = new Shell.GenericContainer();
+        this._box.connect('allocate', Lang.bind(this, this._allocate));
+        this._box.connect('get-preferred-width',
                     Lang.bind(this, this._getPreferredWidth));
-        box.connect('get-preferred-height',
+        this._box.connect('get-preferred-height',
                     Lang.bind(this, this._getPreferredHeight));
-        this.actor.set_child(box);
+        this.actor.set_child(this._box);
 
         this.iconSize = ICON_SIZE;
         this._iconBin = new St.Bin({ x_align: St.Align.MIDDLE,
                                      y_align: St.Align.MIDDLE });
 
-        box.add_actor(this._iconBin);
+        this._box.add_actor(this._iconBin);
 
         if (params.showLabel) {
             this.label = new St.Label({ text: label });
-            box.add_actor(this.label);
+            this._box.add_actor(this.label);
         } else {
             this.label = null;
         }
@@ -188,8 +191,71 @@ const BaseIcon = new Lang.Class({
 
     _onIconThemeChanged: function() {
         this._createIconTexture(this.iconSize);
+    },
+
+    animateOut: function() {
+        // Animate only the container box instead of the
+        // enntire actor, so the styles like hover and running
+        // are not applied while animating.
+        actorZoomOut(this._box);
     }
 });
+
+function actorZoomOut(actor) {
+    let actorClone = new Clutter.Clone({ source: actor,
+                                         reactive: false });
+    let [width, height] = actor.get_transformed_size();
+    let [x, y] = actor.get_transformed_position();
+    actorClone.set_size(width, height);
+    actorClone.set_position(x, y);
+    actorClone.opacity = 255;
+    actorClone.set_pivot_point(0.5, 0.5);
+
+    Main.uiGroup.add_actor(actorClone);
+
+    // Avoid monitor edges to avoid zomming outside the current monitor
+    let monitor = Main.layoutManager.findMonitorForActor(actor);
+    let finalWidth = width * APPICON_ANIMATION_OUT_SCALE;
+    let finalHeight = height * APPICON_ANIMATION_OUT_SCALE;
+    // Assume pivot point at 0.5, 0.5
+    let finalX = x - (finalWidth - width) / 2;
+    let finalY = y - (finalHeight - height) / 2;
+    let [vecX, vecY] = vectorToBeContainedInActor([finalX, finalY], [finalWidth, finalHeight], monitor);
+
+    Tweener.addTween(actorClone,
+                     { time: APPICON_ANIMATION_OUT_TIME,
+                       scale_x: APPICON_ANIMATION_OUT_SCALE,
+                       scale_y: APPICON_ANIMATION_OUT_SCALE,
+                       translation_x: vecX,
+                       translation_y: vecY,
+                       opacity: 0,
+                       transition: 'easeOutQuad',
+                       onComplete: function() {
+                           actorClone.destroy();
+                       }
+                    });
+}
+
+function vectorToBeContainedInActor(position, size, actor) {
+        // Avoid actors bigger than the screen, since they cannot be contained
+        if (size[0] >  actor.width || size[1] > actor.height)
+            return undefined;
+
+        let vecX = 0;
+        let vecY = 0;
+
+        if (position[0] < actor.x)
+            vecX = actor.x - position[0];
+        else if (position[0] + size[0] > actor.x + actor.width)
+            vecX = actor.x + actor.width - (position[0] + size[0]);
+
+        if (position[1] < actor.y)
+            vecY = actor.y - position[1];
+        else if (position[1] + size[1] > actor.y + actor.height)
+            vecY = actor.y + actor.height - (position[1] + size[1]);
+
+        return [vecX, vecY];
+}
 
 const IconGrid = new Lang.Class({
     Name: 'IconGrid',
