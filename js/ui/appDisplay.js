@@ -467,7 +467,7 @@ const AllView = new Lang.Class({
 
         apps.forEach(Lang.bind(this, function(appId) {
             let app = appSys.lookup_app(appId);
-            let icon = new AppIcon(app);
+            let icon = new AppIcon(app, {}, { animateOnNewWindow: true });
             this.addItem(icon);
         }));
 
@@ -768,7 +768,7 @@ const FrequentView = new Lang.Class({
         for (let i = 0; i < mostUsed.length; i++) {
             if (!mostUsed[i].get_app_info().should_show())
                 continue;
-            let appIcon = new AppIcon(mostUsed[i]);
+            let appIcon = new AppIcon(mostUsed[i], {}, { animateOnNewWindow: true });
             this._grid.addItem(appIcon, -1);
         }
     },
