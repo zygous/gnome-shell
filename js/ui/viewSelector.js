@@ -319,6 +319,7 @@ const ViewSelector = new Lang.Class({
     },
 
     zoomFromOverview: function() {
+        this._showPage(this._workspacesPage);
         this._workspacesDisplay.zoomFromOverview();
 
         if (!this._workspacesDisplay.activeWorkspaceHasMaximizedWindows())
@@ -409,8 +410,6 @@ const ViewSelector = new Lang.Class({
         this._showAppsBlocked = true;
         this._showAppsButton.checked = false;
         this._showAppsBlocked = false;
-
-        this._showPage(this._workspacesPage, true);
     },
 
     _onStageKeyPress: function(actor, event) {
