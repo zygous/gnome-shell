@@ -17,6 +17,7 @@ const Main = imports.ui.main;
 const Overview = imports.ui.overview;
 const Tweener = imports.ui.tweener;
 const WindowManager = imports.ui.windowManager;
+const OverviewControls = imports.ui.overviewControls;
 
 const WINDOW_DND_SIZE = 256;
 
@@ -33,6 +34,8 @@ const DRAGGING_WINDOW_OPACITY = 100;
 // Otherwise, we keep looking for a new layout.
 const LAYOUT_SCALE_WEIGHT = 1;
 const LAYOUT_SPACE_WEIGHT = 0.1;
+
+const WINDOW_ANIMATION_MAX_NUMBER_BLENDING = 3;
 
 function _interpolate(start, end, step) {
     return start + (end - start) * step;
@@ -1258,10 +1261,11 @@ const Workspace = new Lang.Class({
             return;
         }
 
-        // We will reposition windows when enter again overview anyway.
+        // We will reposition windows anyway when enter again overview or when ending the windows
+        // animations whith fade animation.
         // In this way we avoid unwanted animations of windows repositioning while
-        // animating overview
-        if (this.leavingOverview)
+        // animating overview.
+        if (this.leavingOverview || this.animatingWindowsFade)
             return;
 
         let initialPositioning = flags & WindowPositionFlags.INITIAL;
@@ -1562,14 +1566,139 @@ const Workspace = new Lang.Class({
         return false;
     },
 
-    // Animate the full-screen to Overview transition.
-    zoomToOverview : function() {
+    fadeToOverview: function() {
+        // We don't want to reposition windows while animating in this way.
+        this.animatingWindowsFade = true;
+
+        // We'll use the OverviewControls.SIDE_CONTROLS_ANIMATION_TIME as max
+        // time instead of Overview.ANIMATION_TIME because we are going to
+        // show the apps page, and that's the time it lasts to show it and
+        // hide the windows page, making windows clones opacity zero. In this way
+        // we avoid cutting the animation at the middle.
+        let windowBaseTime;
+        if (this._windows.length > WINDOW_ANIMATION_MAX_NUMBER_BLENDING) {
+            // Reserve one "slot" for the animation of the windows from
+            // WINDOW_ANIMATION_MAX_NUMBER_BLENDING to this._windows.length
+            windowBaseTime = OverviewControls.SIDE_CONTROLS_ANIMATION_TIME / (WINDOW_ANIMATION_MAX_NUMBER_BLENDING + 1);
+        } else {
+            windowBaseTime = OverviewControls.SIDE_CONTROLS_ANIMATION_TIME / this._windows.length;
+        }
+        // Animate gradually the most WINDOW_ANIMATION_MAX_NUMBER_BLENDING accesed windows hoping that
+        // those covers most of the screen so we can achieve a smooth transition.
+        for (let i = 0; i < Math.min(this._windows.length, WINDOW_ANIMATION_MAX_NUMBER_BLENDING); i++)
+            this._fadeWindowToOverview(i, windowBaseTime * (i + 1), i == this._windows.length - 1);
+
+        // Animate the rest of the windows from WINDOW_ANIMATION_MAX_NUMBER_BLENDING to this._windows.length
+        // at the same time.
+        for (let i = WINDOW_ANIMATION_MAX_NUMBER_BLENDING; i < this._windows.length; i++)
+            this._fadeWindowToOverview(i, windowBaseTime * (WINDOW_ANIMATION_MAX_NUMBER_BLENDING + 1), i == this._windows.length - 1);
+    },
+
+    _fadeWindowToOverview: function(index, time, lastWindow) {
+        let clone = this._windows[index];
+        let overlay = this._windowOverlays[index];
+
+        if (overlay)
+            overlay.hide();
+
+        let [origX, origY] = clone.getOriginalPosition();
+        Tweener.addTween(clone.actor,
+                         { time: time,
+                           opacity: 0,
+                           transition: 'easeOutQuad',
+                           onComplete: Lang.bind(this,
+                                function() {
+                                    if (lastWindow) {
+                                        this.animatingWindowsFade = false;
+                                        // Position and scale the windows in case the user use workspacePage
+                                        // after using appsPage
+                                        this._recalculateWindowPositions(WindowPositionFlags.INITIAL);
+                                        // Given that viewSelector uses the same time to hide the windows
+                                        // we can restore the opacity of windows clones here withouth flickering
+                                        for (let i = 0; i < this._windows.length; i++) {
+                                            let clone = this._windows[i];
+                                            clone.actor.opacity = 255;
+                                        }
+                                    }
+                                })
+                        });
+    },
+
+    fadeFromOverview: function() {
+        this.leavingOverview = true;
+
+        for (let i = 0; i < this._windows.length; i++) {
+            let clone = this._windows[i];
+            Tweener.removeTweens(clone.actor);
+        }
+
+        if (this._repositionWindowsId > 0) {
+            Mainloop.source_remove(this._repositionWindowsId);
+            this._repositionWindowsId = 0;
+        }
+        this._overviewHiddenId = Main.overview.connect('hidden', Lang.bind(this,
+                                                                           this._doneLeavingOverview));
+
+        if (this.metaWorkspace != null && this.metaWorkspace != global.screen.get_active_workspace())
+            return;
+
+        let windowBaseTime;
+        if (this._windows.length > WINDOW_ANIMATION_MAX_NUMBER_BLENDING) {
+            // Reserve one "slot" for the animation of the windows from
+            // WINDOW_ANIMATION_MAX_NUMBER_BLENDING to this._windows.length
+            windowBaseTime = Overview.ANIMATION_TIME / (WINDOW_ANIMATION_MAX_NUMBER_BLENDING + 1);
+        } else {
+            windowBaseTime = Overview.ANIMATION_TIME / this._windows.length;
+        }
+        // Animate gradually the most WINDOW_ANIMATION_MAX_NUMBER_BLENDING accesed windows hoping that
+        // those covers most of the screen so we can achieve a smooth transition.
+        for (let i = 0; i < Math.min(this._windows.length, WINDOW_ANIMATION_MAX_NUMBER_BLENDING); i++)
+            this._fadeWindowFromOverview(i, windowBaseTime * (i + 1), i == this._windows.length - 1);
+
+        // Animate the rest of the windows from WINDOW_ANIMATION_MAX_NUMBER_BLENDING to this._windows.length
+        // at the same time.
+        for (let i = WINDOW_ANIMATION_MAX_NUMBER_BLENDING; i < this._windows.length; i++)
+            this._fadeWindowFromOverview(i, windowBaseTime * (WINDOW_ANIMATION_MAX_NUMBER_BLENDING + 1), i == this._windows.length - 1);
+    },
+
+    _fadeWindowFromOverview: function(index, time) {
+        // Reverse order of windows, so the most upper in the stack is animated first
+        let reverseStackWindow = this._windows.slice();
+        reverseStackWindow.reverse();
+        let reverseStackOverlays = this._windowOverlays.slice();
+        reverseStackOverlays.reverse();
+
+        let clone = reverseStackWindow[index];
+        let overlay = reverseStackOverlays[index];
+
+        if (overlay)
+            overlay.hide();
+
+        if (clone.metaWindow.showing_on_its_workspace()) {
+            let [origX, origY] = clone.getOriginalPosition();
+            clone.actor.scale_x = 1;
+            clone.actor.scale_y = 1;
+            clone.actor.x = origX;
+            clone.actor.y = origY;
+            clone.actor.opacity = 0;
+            Tweener.addTween(clone.actor,
+                             { time: time,
+                               opacity: 255,
+                               transition: 'easeOutQuad' });
+        } else {
+            // The window is hidden
+            clone.actor.scale_x = 0;
+            clone.actor.scale_y = 0;
+            clone.actor.opacity = 0;
+        }
+    },
+
+    zoomToOverview: function() {
         // Position and scale the windows.
         this._recalculateWindowPositions(WindowPositionFlags.ANIMATE | WindowPositionFlags.INITIAL);
     },
 
-    // Animates the return from Overview mode
-    zoomFromOverview : function() {
+    zoomFromOverview: function() {
         let currentWorkspace = global.screen.get_active_workspace();
 
         this.leavingOverview = true;
@@ -1590,35 +1719,37 @@ const Workspace = new Lang.Class({
             return;
 
         // Position and scale the windows.
-        for (let i = 0; i < this._windows.length; i++) {
-            let clone = this._windows[i];
-            let overlay = this._windowOverlays[i];
+        for (let i = 0; i < this._windows.length; i++)
+           this._zoomWindowFromOverview(i);
+    },
 
-            if (overlay)
-                overlay.hide();
+    _zoomWindowFromOverview: function(index) {
+        let clone = this._windows[index];
+        let overlay = this._windowOverlays[index];
 
-            if (clone.metaWindow.showing_on_its_workspace()) {
-                let [origX, origY] = clone.getOriginalPosition();
+        if (overlay)
+            overlay.hide();
 
-                Tweener.addTween(clone.actor,
-                                 { x: origX,
-                                   y: origY,
-                                   scale_x: 1.0,
-                                   scale_y: 1.0,
-                                   time: Overview.ANIMATION_TIME,
-                                   opacity: 255,
-                                   transition: 'easeOutQuad'
-                                 });
-            } else {
-                // The window is hidden, make it shrink and fade it out
-                Tweener.addTween(clone.actor,
-                                 { scale_x: 0,
-                                   scale_y: 0,
-                                   opacity: 0,
-                                   time: Overview.ANIMATION_TIME,
-                                   transition: 'easeOutQuad'
-                                 });
-            }
+        if (clone.metaWindow.showing_on_its_workspace()) {
+            let [origX, origY] = clone.getOriginalPosition();
+            Tweener.addTween(clone.actor,
+                             { x: origX,
+                               y: origY,
+                               scale_x: 1.0,
+                               scale_y: 1.0,
+                               time: Overview.ANIMATION_TIME,
+                               opacity: 255,
+                               transition: 'easeOutQuad'
+                             });
+        } else {
+            // The window is hidden, make it shrink and fade it out
+            Tweener.addTween(clone.actor,
+                             { scale_x: 0,
+                               scale_y: 0,
+                               opacity: 0,
+                               time: Overview.ANIMATION_TIME,
+                               transition: 'easeOutQuad'
+                             });
         }
     },
 

@@ -298,29 +298,39 @@ const ViewSelector = new Lang.Class({
     },
 
     _toggleAppsPage: function() {
+        this.showingAppsToOverview = !this._showAppsButton.checked;
         Main.overview.show();
         this._showAppsButton.checked = !this._showAppsButton.checked;
     },
 
     showApps: function() {
+        this.showingAppsToOverview = true;
         Main.overview.show();
         this._showAppsButton.checked = true;
     },
 
     show: function() {
         this.reset();
-
-        this._workspacesDisplay.show();
+        this._workspacesDisplay.show(this.showingAppsToOverview);
         this._activePage = null;
-        this._showPage(this._workspacesPage);
+        if (this.showingAppsToOverview)
+            this._showPage(this._appsPage);
+        else
+            this._showPage(this._workspacesPage);
 
         if (!this._workspacesDisplay.activeWorkspaceHasMaximizedWindows())
             Main.overview.fadeOutDesktop();
     },
 
-    zoomFromOverview: function() {
-        this._showPage(this._workspacesPage);
-        this._workspacesDisplay.zoomFromOverview();
+    animateFromOverview: function() {
+        let showingAppsFromOverview = this._activePage != this._workspacesPage;
+        if (showingAppsFromOverview) {
+            // Let workspace.js manage the animation of the windows clones.
+            this._workspacesPage.show();
+            this._workspacesPage.opacity = 255;
+            this._showPage(this._workspacesPage);
+        }
+        this._workspacesDisplay.animateFromOverview(showingAppsFromOverview);
 
         if (!this._workspacesDisplay.activeWorkspaceHasMaximizedWindows())
             Main.overview.fadeInDesktop();
@@ -367,7 +377,18 @@ const ViewSelector = new Lang.Class({
         Tweener.addTween(this._activePage,
             { opacity: 255,
               time: OverviewControls.SIDE_CONTROLS_ANIMATION_TIME,
-              transition: 'easeOutQuad'
+              transition: 'easeOutQuad',
+              onComplete: Lang.bind(this,
+                function() {
+                    // If we were animating from the desktop view to the appsPage,
+                    // previously we showed the workspacePage to allow the windows to animate,
+                    // but now we no longer want to show it given that we are now
+                    // on the apps page or search page.
+                    if (this.showingAppsToOverview) {
+                        this.showingAppsToOverview = false;
+                        this._workspacesPage.hide();
+                    }
+                })
             });
     },
 
