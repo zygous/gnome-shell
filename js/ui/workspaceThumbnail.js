@@ -1121,9 +1121,7 @@ const ThumbnailsBox = new Lang.Class({
         // the size request to our children because we know how big they are and know
         // that the actors aren't depending on the virtual functions being called.
 
-        if (this._thumbnails.length == 0)
-            return;
-
+        this._ensurePorthole();
         let themeNode = this.actor.get_theme_node();
 
         let spacing = themeNode.get_length('spacing');
@@ -1135,8 +1133,7 @@ const ThumbnailsBox = new Lang.Class({
     },
 
     _getPreferredWidth: function(actor, forHeight, alloc) {
-        if (this._thumbnails.length == 0)
-            return;
+        this._ensurePorthole();
 
         let themeNode = this.actor.get_theme_node();
 
@@ -1152,6 +1149,10 @@ const ThumbnailsBox = new Lang.Class({
         let width = Math.round(this._porthole.width * scale);
         alloc.min_size = width;
         alloc.natural_size = width;
+    },
+
+    _ensurePorthole: function() {
+        this._porthole = Main.layoutManager.getWorkAreaForMonitor(Main.layoutManager.primaryIndex);
     },
 
     _allocate: function(actor, box, flags) {
