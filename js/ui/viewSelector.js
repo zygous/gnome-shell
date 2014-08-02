@@ -327,7 +327,6 @@ const ViewSelector = new Lang.Class({
         if (showingAppsFromOverview) {
             // Let workspace.js manage the animation of the windows clones.
             this._workspacesPage.show();
-            this._workspacesPage.opacity = 255;
             this._showPage(this._workspacesPage);
         }
         this._workspacesDisplay.animateFromOverview(showingAppsFromOverview);

@@ -1590,11 +1590,25 @@ const Workspace = new Lang.Class({
 
         // Animate the rest of the windows from WINDOW_ANIMATION_MAX_NUMBER_BLENDING to this._windows.length
         // at the same time.
-        for (let i = WINDOW_ANIMATION_MAX_NUMBER_BLENDING; i < this._windows.length; i++)
-            this._fadeWindowToOverview(i, windowBaseTime * (WINDOW_ANIMATION_MAX_NUMBER_BLENDING + 1), i == this._windows.length - 1);
+        let onCompleteWindowsAnimation =  function() {
+            this.animatingWindowsFade = false;
+            // Position and scale the windows in case the user use workspacePage
+            // after using appsPage
+            this._recalculateWindowPositions(WindowPositionFlags.INITIAL);
+            // Given that viewSelector uses the same time to hide the windows
+            // we can restore the opacity of windows clones here withouth flickering
+            for (let i = 0; i < this._windows.length; i++) {
+                let clone = this._windows[i];
+                clone.actor.opacity = 255;
+            }
+        });
+        for (let i = WINDOW_ANIMATION_MAX_NUMBER_BLENDING; i < this._windows.length; i++) {
+            let onComplete = i == this._windows.length ? onCompleteWindowsAnimation : none;
+            this._fadeWindowToOverview(i, windowBaseTime * (WINDOW_ANIMATION_MAX_NUMBER_BLENDING + 1), onComplete);
+        }
     },
 
-    _fadeWindowToOverview: function(index, time, lastWindow) {
+    _fadeWindowToOverview: function(index, time, onComplete) {
         let clone = this._windows[index];
         let overlay = this._windowOverlays[index];
 
@@ -1608,18 +1622,8 @@ const Workspace = new Lang.Class({
                            transition: 'easeOutQuad',
                            onComplete: Lang.bind(this,
                                 function() {
-                                    if (lastWindow) {
-                                        this.animatingWindowsFade = false;
-                                        // Position and scale the windows in case the user use workspacePage
-                                        // after using appsPage
-                                        this._recalculateWindowPositions(WindowPositionFlags.INITIAL);
-                                        // Given that viewSelector uses the same time to hide the windows
-                                        // we can restore the opacity of windows clones here withouth flickering
-                                        for (let i = 0; i < this._windows.length; i++) {
-                                            let clone = this._windows[i];
-                                            clone.actor.opacity = 255;
-                                        }
-                                    }
+                                    if (onComplete)
+                                        onComplete();
                                 })
                         });
     },
